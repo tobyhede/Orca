@@ -575,6 +575,47 @@ library[':'] = function OperatorMidi (orca, x, y, passive) {
   }
 }
 
+library['+'] = function OperatorMidi (orca, x, y, passive) {
+  Operator.call(this, orca, x, y, ':', true)
+
+  this.name = 'midi'
+  this.info = 'Sends a MIDI note shifted {steps} from root note'
+  this.ports.channel = { x: 1, y: 0 }
+  this.ports.octave = { x: 2, y: 0, clamp: { min: 0, max: 8 } }
+  this.ports.root = { x: 3, y: 0 }
+  this.ports.steps = { x: 4, y: 0, default: '0' }
+  this.ports.velocity = { x: 5, y: 0, default: 'f', clamp: { min: 0, max: 16 } }
+  this.ports.length = { x: 6, y: 0, default: '1', clamp: { min: 0, max: 32 } }
+  this.ports.hold = { x: 6, y: 0 }
+
+  this.operation = function (force = false) {
+    if (!this.hasNeighbor('*') && force === false) { return }
+    if (this.listen(this.ports.channel) === '.') { return }
+    if (this.listen(this.ports.octave) === '.') { return }
+    if (this.listen(this.ports.root) === '.') { return }
+    if (!isNaN(this.listen(this.ports.root))) { return }
+
+    const channel = this.listen(this.ports.channel, true)
+    if (channel > 15) { return }
+    const octave = this.listen(this.ports.octave, true)
+    const note = this.listen(this.ports.root)
+    const steps = this.listen(this.ports.steps)
+    const velocity = this.listen(this.ports.velocity, true)
+
+    const hold = this.listen(this.ports.hold)
+
+    const length = hold === '*' ? hold : this.listen(this.ports.length, true)
+
+    client.io.midi.push(channel, octave, note, velocity, length, steps)
+
+    if (force === true) {
+      client.io.midi.run()
+    }
+
+    this.draw = false
+  }
+}
+
 library['!'] = function OperatorCC (orca, x, y) {
   Operator.call(this, orca, x, y, '!', true)
 
