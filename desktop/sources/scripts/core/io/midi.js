@@ -28,6 +28,8 @@ function Midi (client) {
       if (item.isPlayed === false) {
         this.press(item)
       }
+      if (item.length === '*') { return }
+
       if (item.length < 1) {
         this.release(item, id)
       } else {
