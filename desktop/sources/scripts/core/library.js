@@ -511,6 +511,38 @@ library['#'] = function OperatorComment (orca, x, y, passive) {
   }
 }
 
+library['@'] = function OperatorAt (orca, x, y, passive) {
+  Operator.call(this, orca, x, y, 'a', true)
+
+  this.name = 'at'
+  this.info = 'Bangs at the frame count'
+
+  this.ports.l1 = { x: -1, y: 0, default: '0'}
+  this.ports.l2 = { x: -2, y: 0, default: '0' }
+  this.ports.r1 = { x: 1, y: 0, default: '0' }
+  this.ports.r2 = { x: 2, y: 0, default: '0' }
+  this.ports.output = { x: 0, y: 1, bang: true, output: true }
+
+
+  this.operation = function (force = false) {
+
+    const start1 = this.listen(this.ports.l1)
+    const start2 = this.listen(this.ports.l2)
+
+    const stop1 = this.listen(this.ports.r1)
+    const stop2 = this.listen(this.ports.r2)
+
+    const bars = parseInt((client.orca.f / 8))
+    const start = parseInt(start2 + '' + start1, 36)
+    const stop = parseInt(stop1 + '' + stop2, 36)
+
+    // console.log({bars, start, stop})
+
+    return start <= bars && bars < stop
+  }
+}
+
+
 // IO
 
 library.$ = function OperatorSelf (orca, x, y, passive) {
