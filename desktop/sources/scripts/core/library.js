@@ -515,30 +515,31 @@ library['@'] = function OperatorAt (orca, x, y, passive) {
   Operator.call(this, orca, x, y, 'a', true)
 
   this.name = 'at'
-  this.info = 'Bangs at the frame count'
+  this.info = 'Bangs at the beat count'
 
-  this.ports.l1 = { x: -1, y: 0, default: '0'}
-  this.ports.l2 = { x: -2, y: 0, default: '0' }
-  this.ports.r1 = { x: 1, y: 0, default: '0' }
-  this.ports.r2 = { x: 2, y: 0, default: '0' }
+  this.ports.key = { x: -2, y: 0 }
+  this.ports.len = { x: -1, y: 0, clamp: { min: 1 } }
   this.ports.output = { x: 0, y: 1, bang: true, output: true }
 
-
   this.operation = function (force = false) {
+    const len = this.listen(this.ports.len, true)
+    let key = this.listen(this.ports.key, true)
 
-    const start1 = this.listen(this.ports.l1)
-    const start2 = this.listen(this.ports.l2)
+    for (let offset = 0; offset < len; offset++) {
+      orca.lock(this.x + offset + 1, this.y)
+      orca.lock(this.x + offset + 1, this.y - 1)
+    }
 
-    const stop1 = this.listen(this.ports.r1)
-    const stop2 = this.listen(this.ports.r2)
+    this.ports.zeds = { x: (key % len) + 1, y: 0 }
+    this.ports.ones = { x: (key % len) + 1, y: -1 }
 
-    const bars = parseInt((client.orca.f / 8))
-    const start = parseInt(start2 + '' + start1, 36)
-    const stop = parseInt(stop1 + '' + stop2, 36)
+    const zeds = this.listen(this.ports.zeds)
+    const ones = this.listen(this.ports.ones)
 
-    // console.log({bars, start, stop})
+    const beats = Math.floor((client.orca.f / 4) + 1)
+    const at = parseInt(zeds + '' + ones, 36)
 
-    return start <= bars && bars < stop
+    return beats === at && client.orca.f % 4 === 0
   }
 }
 
