@@ -53,6 +53,15 @@ function Commander (client) {
       const formatted = new Date(250 * (client.orca.f * (60 / client.clock.speed.value))).toISOString().substr(14, 5).replace(/:/g, '')
       client.orca.writeBlock(origin ? origin.x : client.cursor.x, origin ? origin.y : client.cursor.y, `${formatted}`)
     },
+    stof: (p, origin) => {
+      const beats_per_min = (60 / client.clock.speed.value)
+      const frames_per_second = beats_per_min/ 4
+      const frames = Math.floor(parseInt(p.str) / frames_per_second)
+      const nearest_beat = Math.round(frames / 4) * 4;
+      const zz = nearest_beat.toString(36)
+      client.orca.writeBlock(origin ? origin.x : client.cursor.x, origin ? origin.y : client.cursor.y, `${zz}.${frames}.${nearest_beat}`)
+
+    },
     // Themeing
     color: (p) => {
       if (p.parts[0]) { client.theme.set('b_low', p.parts[0]) }
