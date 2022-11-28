@@ -2,6 +2,7 @@
 
 /* global Operator */
 /* global client */
+/* global chords */
 
 const library = {}
 
@@ -480,6 +481,149 @@ library.z = function OperatorZ (orca, x, y, passive) {
   }
 }
 
+// Custom
+library['±'] = function OperatorDoubleLerp (orca, x, y, passive) {
+  Operator.call(this, orca, x, y, '±', passive)
+
+  this.name = 'dblerp'
+  this.info = 'Transitions operand to target at rate'
+
+  this.ports.rate = { x: -1, y: 0, default: '1' }
+  this.ports.target = { x: 1, y: 0, default: '0' }
+  this.ports.output = { x: 0, y: 1, sensitive: true, reader: true, output: true }
+
+  this.operation = function (force = false) {
+    const rate = this.listen(this.ports.rate, true)
+    const target = this.listen(this.ports.target, true)
+    const val = this.listen(this.ports.output, true)
+    const mod = val !== target && orca.f % rate === 0 ? val < target ? 1 : -1 : 0
+    return orca.keyOf(val + mod)
+  }
+}
+
+// opt-j
+library['∆'] = function OperatorDelta (orca, x, y, passive) {
+  Operator.call(this, orca, x, y, 'z', passive)
+
+  this.name = 'delta'
+  this.info = 'Bangs if adjacent grid has changed value since last frame'
+
+  this.ports.left = { x: -1, y: 0 }
+  this.ports.right = { x: 1, y: 0 }
+  this.ports.top = { x: 0, y: -1 }
+  this.ports.output = { x: 0, y: 1, bang: true, output: true }
+
+  this.operation = function (force = false) {
+    const left = this.listen(this.ports.left)
+    const right = this.listen(this.ports.right)
+    const top = this.listen(this.ports.top)
+
+    const l = `l${this.x}.${this.y}`
+    const r = `r${this.x}.${this.y}`
+    const t = `t${this.x}.${this.y}`
+
+    const result = left !== '.' && left !== orca.variables[l] ||
+      right !== '.' && right !== orca.variables[r] ||
+      top !== '.' && top !== orca.variables[t]
+
+    orca.delta[l] = left
+    orca.delta[r] = right
+    orca.delta[t] = top
+
+    return result
+  }
+}
+
+library['@'] = function OperatorAt (orca, x, y, passive) {
+  Operator.call(this, orca, x, y, '@', true)
+
+  this.name = 'at'
+  this.info = 'Bangs at the frame count'
+
+  this.ports.key = { x: -2, y: 0 }
+  this.ports.len = { x: -1, y: 0, clamp: { min: 1 } }
+  this.ports.output = { x: 0, y: 1, bang: true, output: true }
+
+  const ary = []
+
+  this.operation = function (force = false) {
+    const len = this.listen(this.ports.len, true)
+    let key = this.listen(this.ports.key, true)
+
+    for (let n = 0; n < len; n++) {
+      orca.lock(this.x + 1, this.y - n)
+      orca.lock(this.x + 2, this.y - n)
+      orca.lock(this.x + 3, this.y - n)
+    }
+
+    this.ports.c = { x: 1, y: 0 - (key % len) }
+    this.ports.b = { x: 2, y: 0 - (key % len) }
+    this.ports.a = { x: 3, y: 0 - (key % len) }
+
+    const c = this.listen(this.ports.c)
+    const b = this.listen(this.ports.b)
+    const a = this.listen(this.ports.a)
+
+    if (c !== '.') ary.push(c)
+    if (b !== '.') ary.push(b)
+    if (a !== '.') ary.push(a)
+
+    const at = parseInt(ary.join(''), 36)
+
+    const result = client.orca.f === at
+
+    if (result && key < (len - 1)) {
+      const keyPort = { x: -2, y: 0, output: true }
+      this.addPort('outKey', keyPort)
+      this.output(`${key + 1}`, keyPort)
+    }
+
+    return result
+  }
+}
+
+// option-m µ
+library['µ'] = function OperatorUntil (orca, x, y, passive) {
+  Operator.call(this, orca, x, y, 'µ', true)
+
+  this.name = 'µntil'
+  this.info = 'Bangs from start frame to end frame'
+
+  // this.ports.len = { x: 0, y: -1, clamp: { min: 1 } }
+  this.ports.output = { x: 0, y: 1, bang: true, output: true }
+
+  this.operation = function (force = false) {
+    const len = 3 //this.listen(this.ports.len, true)
+
+    let left = []
+    let right = []
+
+    for (let offset = 0; offset < len; offset++) {
+
+      const lPort = { x: 0 - offset - 1, y: 0 }
+      const rPort = { x: offset + 1, y: 0 }
+
+      this.addPort(`l${offset}`, lPort)
+      this.addPort(`r${offset}`, rPort)
+
+      const l = this.listen(lPort)
+      const r = this.listen(rPort)
+
+      if (l !== '.') left.push(l)
+      if (r !== '.') right.push(r)
+    }
+
+    left = left.reverse().join('')
+    right = right.join('')
+
+    const start = parseInt(left, 36) || 0
+    const stop = right === '*' ? client.orca.f + 1 : parseInt(right, 36) || 0
+
+    // console.log({start, stop})
+    return start <= client.orca.f && client.orca.f <= stop
+  }
+}
+
 // Specials
 
 library['*'] = function OperatorBang (orca, x, y, passive) {
@@ -505,44 +649,11 @@ library['#'] = function OperatorComment (orca, x, y, passive) {
   this.operation = function () {
     for (let x = this.x + 1; x <= orca.w; x++) {
       orca.lock(x, this.y)
-      if (orca.glyphAt(x, this.y) === this.glyph) { break }
+      if  (orca.glyphAt(x, this.y) === this.glyph) { break }
     }
     orca.lock(this.x, this.y)
   }
 }
-
-library['@'] = function OperatorAt (orca, x, y, passive) {
-  Operator.call(this, orca, x, y, 'a', true)
-
-  this.name = 'at'
-  this.info = 'Bangs at the beat count'
-
-  this.ports.key = { x: -2, y: 0 }
-  this.ports.len = { x: -1, y: 0, clamp: { min: 1 } }
-  this.ports.output = { x: 0, y: 1, bang: true, output: true }
-
-  this.operation = function (force = false) {
-    const len = this.listen(this.ports.len, true)
-    let key = this.listen(this.ports.key, true)
-
-    for (let offset = 0; offset < len; offset++) {
-      orca.lock(this.x + offset + 1, this.y)
-      orca.lock(this.x + offset + 1, this.y - 1)
-    }
-
-    this.ports.zeds = { x: (key % len) + 1, y: 0 }
-    this.ports.ones = { x: (key % len) + 1, y: -1 }
-
-    const zeds = this.listen(this.ports.zeds)
-    const ones = this.listen(this.ports.ones)
-
-    const beats = Math.floor((client.orca.f / 4) + 1)
-    const at = parseInt(zeds + '' + ones, 36)
-
-    return beats === at && client.orca.f % 4 === 0
-  }
-}
-
 
 // IO
 
@@ -608,15 +719,164 @@ library[':'] = function OperatorMidi (orca, x, y, passive) {
   }
 }
 
-library['+'] = function OperatorMidi (orca, x, y, passive) {
-  Operator.call(this, orca, x, y, ':', true)
+function mapChordIntervals(chord = 'C'){
+  const intervals = chordTable[chord] || ['P1']
 
-  this.name = 'midi'
-  this.info = 'Sends a MIDI note shifted {steps} from root note'
+  let intervalFromTonic = 0
+  const result = []
+  for (const i of intervals) {
+    const interval = intervalTable[i]
+    intervalFromTonic += interval
+    result.push(intervalFromTonic)
+  }
+  return result
+}
+
+// function readStringAt(x, y) {
+//   let s = ''
+
+//   for (let offset = 0; offset <= 36; offset++) {
+//     const g = orca.glyphAt(this.x + x + offset, this.y + y)
+//     orca.lock(this.x + x + offset, this.y + y)
+//     if (g === '.') { break }
+//     if (g === '#') { break }
+
+//     s += g
+//   }
+// }
+
+function mapChord(s) {
+  const octave = s[0]
+  const tonic = s[1]
+  const chord = s.substring(2)
+
+  const intervals = mapChordIntervals(chord)
+  return {octave, tonic, chord, intervals}
+}
+
+library['ø'] = function OperatorMidiChord (orca, x, y, passive) {
+  Operator.call(this, orca, x, y, '∑', true)
+
+  this.name = 'midi chord'
+  this.info = 'Sends MIDI notes for a chord'
+
+  this.ports.channel = { x: 1, y: 0 }
+  this.ports.x = { x: 2, y: 0, default: '1' }
+  this.ports.y = { x: 3, y: 0, default: '1' }
+  this.ports.velocity = { x: 4, y: 0, default: 'f', clamp: { min: 0, max: 16 } }
+  this.ports.length = { x: 5, y: 0, default: '1', clamp: { min: 0, max: 32 } }
+  this.ports.hold = { x: 5, y: 0 }
+
+  this.operation = function (force = false) {
+    if (!this.hasNeighbor('*') && force === false) { return }
+    if (this.listen(this.ports.channel) === '.') { return }
+
+    const channel = this.listen(this.ports.channel, true)
+    if (channel > 15) { return }
+
+    const velocity = this.listen(this.ports.velocity, true)
+    const hold = this.listen(this.ports.hold)
+    const length = hold === '*' ? hold : this.listen(this.ports.length, true)
+
+    const x = this.listen(this.ports.x, true)
+    const y = this.listen(this.ports.y, true)
+
+    let s = ''
+
+    for (let offset = 0; offset <= 36; offset++) {
+      const g = orca.glyphAt(this.x + x + offset, this.y + y)
+      orca.lock(this.x + x + offset, this.y + y)
+      if (g === '.') { break }
+      if (g === '#') { break }
+
+      s += g
+    }
+
+    console.log('Chord: ' + s);
+
+    const octave = s[0]
+    const tonic = s[1]
+    const chord = s.substring(2)
+
+    const intervals = mapChordIntervals(chord)
+
+    for (const i of intervals) {
+      console.log({tonic, i})
+      client.io.midi.push(channel, octave, tonic, velocity, length, i)
+
+    }
+    if (force === true) {
+      client.io.midi.run()
+    }
+
+    this.draw = false
+  }
+}
+
+library['∑'] = function OperatorArpeggiator(orca, x, y, passive) {
+  Operator.call(this, orca, x, y, '∑', true)
+
+  this.name = 'midi chord arpeggiator'
+  this.info = 'Arpeggiates the hell out of a chord'
+
+  this.ports.channel = { x: 1, y: 0 }
+  this.ports.x = { x: 2, y: 0, default: '1' }
+  this.ports.y = { x: 3, y: 0, default: '1' }
+  this.ports.index = { x: 4, y: 0, default: '0', clamp: { min: 0, max: 12 } }
+  this.ports.velocity = { x: 5, y: 0, default: 'f', clamp: { min: 0, max: 16 } }
+  this.ports.length = { x: 6, y: 0, default: '1', clamp: { min: 0, max: 32 } }
+  this.ports.hold = { x: 6, y: 0 }
+
+  this.operation = function (force = false) {
+    if (!this.hasNeighbor('*') && force === false) { return }
+    if (this.listen(this.ports.channel) === '.') { return }
+
+    const channel = this.listen(this.ports.channel, true)
+    if (channel > 15) { return }
+
+    const index = this.listen(this.ports.index, true)
+    const velocity = this.listen(this.ports.velocity, true)
+    const hold = this.listen(this.ports.hold)
+    const length = hold === '*' ? hold : this.listen(this.ports.length, true)
+
+    const x = this.listen(this.ports.x, true)
+    const y = this.listen(this.ports.y, true)
+
+    let s = ''
+
+    for (let offset = 0; offset <= 36; offset++) {
+      const g = orca.glyphAt(this.x + x + offset, this.y + y)
+      orca.lock(this.x + x + offset, this.y + y)
+      if (g === '.') { break }
+      if (g === '#') { break }
+
+      s += g
+    }
+
+    const {octave, tonic, chord, intervals} = mapChord(s)
+    const interval = intervals[index]
+
+    console.log({octave, tonic, chord, interval, intervals})
+
+    client.io.midi.push(channel, octave, tonic, velocity, length, interval)
+
+    if (force === true) {
+      client.io.midi.run()
+    }
+
+    this.draw = false
+  }
+}
+
+library['|'] = function OperatorMidiShift (orca, x, y, passive) {
+  Operator.call(this, orca, x, y, '|', true)
+
+  this.name = 'midi shift'
+  this.info = 'Sends a MIDI note shifted {interval} from root note'
   this.ports.channel = { x: 1, y: 0 }
   this.ports.octave = { x: 2, y: 0, clamp: { min: 0, max: 8 } }
   this.ports.root = { x: 3, y: 0 }
-  this.ports.steps = { x: 4, y: 0, default: '0' }
+  this.ports.interval = { x: 4, y: 0, default: '0' }
   this.ports.velocity = { x: 5, y: 0, default: 'f', clamp: { min: 0, max: 16 } }
   this.ports.length = { x: 6, y: 0, default: '1', clamp: { min: 0, max: 32 } }
   this.ports.hold = { x: 6, y: 0 }
@@ -632,14 +892,14 @@ library['+'] = function OperatorMidi (orca, x, y, passive) {
     if (channel > 15) { return }
     const octave = this.listen(this.ports.octave, true)
     const note = this.listen(this.ports.root)
-    const steps = this.listen(this.ports.steps)
+    const interval = this.listen(this.ports.interval)
     const velocity = this.listen(this.ports.velocity, true)
 
     const hold = this.listen(this.ports.hold)
 
     const length = hold === '*' ? hold : this.listen(this.ports.length, true)
 
-    client.io.midi.push(channel, octave, note, velocity, length, steps)
+    client.io.midi.push(channel, octave, note, velocity, length, interval)
 
     if (force === true) {
       client.io.midi.run()

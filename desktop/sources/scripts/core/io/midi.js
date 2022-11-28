@@ -46,7 +46,7 @@ function Midi (client) {
 
     if (!transposed) { return }
 
-    const s = parseInt(item.steps)
+    const s = parseInt(item.interval)
     const c = down === true ? 0x90 + channel : 0x80 + channel
     const n = transposed.id + s
     const v = parseInt((item.velocity / 16) * 127)
@@ -74,14 +74,14 @@ function Midi (client) {
     }
   }
 
-  this.push = function (channel, octave, note, velocity, length, steps = '0') {
+  this.push = function (channel, octave, note, velocity, length, interval = '0') {
     const isPlayed = false
-    const item = { channel, octave, note, velocity, length, isPlayed, steps }
+    const item = { channel, octave, note, velocity, length, isPlayed, interval }
 
     // Retrigger duplicates
     for (const id in this.stack) {
       const dup = this.stack[id]
-      if (dup.channel === channel && dup.octave === octave && dup.note === note && dup.steps === steps) { this.release(item, id) }
+      if (dup.channel === channel && dup.octave === octave && dup.note === note && dup.interval === interval) { this.release(item, id) }
     }
 
     this.stack.push(item)

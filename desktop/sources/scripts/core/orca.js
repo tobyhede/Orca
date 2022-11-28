@@ -11,6 +11,7 @@ function Orca (library) {
   this.locks = []
   this.runtime = []
   this.variables = {}
+  this.delta = {}
 
   this.run = function () {
     this.runtime = this.parse()
@@ -124,10 +125,12 @@ function Orca (library) {
   }
 
   // Locks
-
   this.release = function () {
     this.locks = new Array(this.w * this.h)
-    this.variables = {}
+    this.variables = {
+      ...this.delta
+    }
+    this.delta = {}
   }
 
   this.unlock = function (x, y) {
@@ -147,6 +150,10 @@ function Orca (library) {
 
   this.isAllowed = function (g) {
     return g === '.' || !!library[`${g}`.toLowerCase()]
+  }
+
+  this.isOperator = function (g) {
+    return !!library[`${g}`.toLowerCase()]
   }
 
   this.isSpecial = function (g) {
@@ -216,6 +223,10 @@ function Orca (library) {
   this.toRect = (str = this.s) => {
     const lines = str.trim().split(/\r?\n/)
     return { x: lines[0].length, y: lines.length }
+  }
+
+  this.displayVariables = function () {
+    return Object.keys(this.variables).filter((key) => key.length === 1).join('')
   }
 
   this.reset()

@@ -281,6 +281,8 @@ function Client () {
     if (type === 10) { return { bg: this.theme.active.background, fg: this.theme.active.f_high } }
     // Clock(yellow fg)
     if (type === 11) { return { fg: this.theme.active.b_inv } }
+    // // Operator
+    // if (type === 13) { return { bg: this.theme.active.b_med, fg: this.theme.active.f_low } }
     // Default
     return { fg: this.theme.active.f_low }
   }
@@ -314,6 +316,7 @@ function Client () {
     if (glyph === '*' && isLocked === false) { return 2 }
     const port = this.ports[this.orca.indexAt(x, y)]
     if (port) { return port[2] }
+    if (this.orca.isOperator(glyph)) { return 13 }
     if (isLocked === true) { return 5 }
     return 20
   }
@@ -331,9 +334,12 @@ function Client () {
     } else {
       this.write(this.orca.f < 25 ? `ver${this.version}` : `${Object.keys(this.source.cache).length} mods`, this.grid.w * 0, this.orca.h + 1, this.grid.w)
       this.write(`${this.orca.w}x${this.orca.h}`, this.grid.w * 1, this.orca.h + 1, this.grid.w)
-      this.write(`${this.grid.w}/${this.grid.h}${this.tile.w !== 10 ? ' ' + (this.tile.w / 10).toFixed(1) : ''}`, this.grid.w * 2, this.orca.h + 1, this.grid.w)
+      const formatted = new Date(250 * (client.orca.f * (60 / client.clock.speed.value))).toISOString().substr(14, 5).replace(/:/g, '')
+      this.write(formatted, this.grid.w * 2, this.orca.h + 1, this.grid.w)
+      // this.write(`${this.grid.w}/${this.grid.h}${this.tile.w !== 10 ? ' ' + (this.tile.w / 10).toFixed(1) : ''}`, this.grid.w * 2, this.orca.h + 1, this.grid.w)
+      this.write(`${this.io.inspect(this.grid.w)}`, this.grid.w * 4, this.orca.h, this.grid.w - 1)
       this.write(`${this.clock}`, this.grid.w * 3, this.orca.h + 1, this.grid.w, this.clock.isPuppet ? 3 : this.io.midi.isClock ? 11 : this.clock.isPaused ? 20 : 2)
-      this.write(`${display(Object.keys(this.orca.variables).join(''), this.orca.f, this.grid.w - 1)}`, this.grid.w * 4, this.orca.h + 1, this.grid.w - 1)
+      this.write(`${display(this.orca.displayVariables(), this.orca.f, this.grid.w - 1)}`, this.grid.w * 4, this.orca.h + 1, this.grid.w - 1)
       this.write(this.orca.f < 250 ? `> ${this.io.midi.toOutputString()}` : '', this.grid.w * 5, this.orca.h + 1, this.grid.w * 4)
     }
   }
